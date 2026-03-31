@@ -1,0 +1,142 @@
+---
+export const prerender = false;
+
+import Layout from '../components/Layout.astro';
+import AccountDashboard from '../components/AccountDashboard.astro';
+import Alert from '../components/Alert.astro';
+import { supabase } from '../utils/database';
+import type { Tables } from '../../supabase/types';
+
+// ── Guard: Supabase not configured ──
+const isNotConfigured = !supabase;
+
+let account: Tables<'mt5_accounts'> | null = null;
+let accountErr: { message: string } | null = null;
+let positions: Tables<'mt5_positions'>[] = [];
+let trades: Pick<Tables<'mt5_trade_history'>, 'profit' | 'close_time'>[] = [];
+
+if (supabase) {
+  // ── Fetch account (first account; extend to multi-account as needed) ──
+  const accountResult = await supabase
+    .from('mt5_accounts')
+    .select('*')
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  accountErr = accountResult.error;
+  account = accountResult.data?.[0] ?? null;
+
+  // ── Fetch open positions ──
+  if (account) {
+    const { data } = await supabase
+      .from('mt5_positions')
+      .select('*')
+      .eq('account_id', account.id)
+      .order('open_time', { ascending: false });
+    positions = data ?? [];
+  }
+
+  // ── Fetch closed trades for Sharpe ratio ──
+  if (account) {
+    const { data } = await supabase
+      .from('mt5_trade_history')
+      .select('profit, close_time')
+      .eq('account_id', account.id)
+      .order('close_time', { ascending: true });
+    trades = data ?? [];
+  }
+}
+
+// ── Sharpe ratio calculation ──
+// Uses daily aggregated returns, annualised (√252 trading days).
+// Risk-free rate assumed 0 for simplicity.
+function computeSharpe(
+  tradeRows: typeof trades,
+  startingBalance: number
+): number | null {
+  if (tradeRows.length < 2) return null;
+
+  // Build a map of daily net profit
+  const dailyMap = new Map<string, number>();
+  for (const t of tradeRows) {
+    const day = t.close_time.slice(0, 10); // YYYY-MM-DD
+    dailyMap.set(day, (dailyMap.get(day) ?? 0) + t.profit);
+  }
+
+  // Convert to daily return % relative to a running balance
+  const dailyReturns: number[] = [];
+  let runningBalance = startingBalance;
+  for (const [, profit] of dailyMap) {
+    if (runningBalance === 0) continue;
+    dailyReturns.push(profit / runningBalance);
+    runningBalance += profit;
+  }
+
+  if (dailyReturns.length < 2) return null;
+
+  const n = dailyReturns.length;
+  const mean = dailyReturns.reduce((a, b) => a + b, 0) / n;
+  const variance =
+    dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1);
+  const stdDev = Math.sqrt(variance);
+
+  if (stdDev === 0) return null;
+
+  // Annualise: multiply by √252
+  return (mean / stdDev) * Math.sqrt(252);
+}
+
+// Estimate starting balance from current balance minus realised P&L
+const realisedPL = trades.reduce((s, t) => s + t.profit, 0);
+const estimatedStartBalance = account
+  ? account.balance - realisedPL
+  : 10000;
+
+const sharpeRatio = account
+  ? computeSharpe(trades, estimatedStartBalance > 0 ? estimatedStartBalance : account.balance)
+  : null;
+---
+
+<Layout title="MT5 Account — Overview">
+  <div class="flex flex-col gap-8">
+    <div class="flex flex-col gap-1">
+      <h1 class="text-2xl font-bold text-white">MT5 Account Overview</h1>
+      <p class="text-neutral-400 text-sm">
+        Live indicators: equity, P&amp;L, swaps, total margin &amp; Sharpe ratio.
+      </p>
+    </div>
+
+    {isNotConfigured && (
+      <Alert
+        variant="note"
+        title="Supabase not configured"
+        text="Set SUPABASE_DATABASE_URL and SUPABASE_ANON_KEY in your .env file, then run the MT5 migration to see live account data."
+      />
+    )}
+
+    {!isNotConfigured && accountErr && (
+      <Alert
+        variant="error"
+        title="Error loading account"
+        text={accountErr.message}
+      />
+    )}
+
+    {!isNotConfigured && !accountErr && !account && (
+      <Alert
+        variant="note"
+        title="No MT5 accounts found"
+        text="Insert a row into mt5_accounts to get started. Run the seed SQL in supabase/seed-mt5.sql for demo data."
+      />
+    )}
+
+    {account && (
+      <AccountDashboard
+        account={account}
+        positions={positions}
+        sharpeRatio={sharpeRatio}
+        tradeCount={trades.length}
+      />
+    )}
+  </div>
+</Layout>

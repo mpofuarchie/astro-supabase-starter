@@ -9,6 +9,182 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      mt5_accounts: {
+        Row: {
+          id: string;
+          account_number: string;
+          account_name: string;
+          broker: string;
+          currency: string;
+          leverage: number;
+          balance: number;
+          equity: number;
+          margin: number;
+          free_margin: number;
+          margin_level: number | null;
+          floating_pl: number;
+          swap: number;
+          commission: number;
+          last_updated: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_number: string;
+          account_name: string;
+          broker?: string;
+          currency?: string;
+          leverage?: number;
+          balance?: number;
+          equity?: number;
+          margin?: number;
+          free_margin?: number;
+          margin_level?: number | null;
+          floating_pl?: number;
+          swap?: number;
+          commission?: number;
+          last_updated?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_number?: string;
+          account_name?: string;
+          broker?: string;
+          currency?: string;
+          leverage?: number;
+          balance?: number;
+          equity?: number;
+          margin?: number;
+          free_margin?: number;
+          margin_level?: number | null;
+          floating_pl?: number;
+          swap?: number;
+          commission?: number;
+          last_updated?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      mt5_positions: {
+        Row: {
+          id: string;
+          account_id: string;
+          ticket: number;
+          symbol: string;
+          type: 'buy' | 'sell';
+          volume: number;
+          open_price: number;
+          current_price: number | null;
+          sl: number | null;
+          tp: number | null;
+          profit: number;
+          swap: number;
+          commission: number;
+          open_time: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          ticket: number;
+          symbol: string;
+          type: 'buy' | 'sell';
+          volume: number;
+          open_price: number;
+          current_price?: number | null;
+          sl?: number | null;
+          tp?: number | null;
+          profit?: number;
+          swap?: number;
+          commission?: number;
+          open_time: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          ticket?: number;
+          symbol?: string;
+          type?: 'buy' | 'sell';
+          volume?: number;
+          open_price?: number;
+          current_price?: number | null;
+          sl?: number | null;
+          tp?: number | null;
+          profit?: number;
+          swap?: number;
+          commission?: number;
+          open_time?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'mt5_positions_account_id_fkey';
+            columns: ['account_id'];
+            referencedRelation: 'mt5_accounts';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      mt5_trade_history: {
+        Row: {
+          id: string;
+          account_id: string;
+          ticket: number;
+          symbol: string;
+          type: 'buy' | 'sell';
+          volume: number;
+          open_price: number;
+          close_price: number;
+          profit: number;
+          swap: number;
+          commission: number;
+          open_time: string;
+          close_time: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          ticket: number;
+          symbol: string;
+          type: 'buy' | 'sell';
+          volume: number;
+          open_price: number;
+          close_price: number;
+          profit?: number;
+          swap?: number;
+          commission?: number;
+          open_time: string;
+          close_time: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_id?: string;
+          ticket?: number;
+          symbol?: string;
+          type?: 'buy' | 'sell';
+          volume?: number;
+          open_price?: number;
+          close_price?: number;
+          profit?: number;
+          swap?: number;
+          commission?: number;
+          open_time?: string;
+          close_time?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'mt5_trade_history_account_id_fkey';
+            columns: ['account_id'];
+            referencedRelation: 'mt5_accounts';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       frameworks: {
         Row: {
           description: string;

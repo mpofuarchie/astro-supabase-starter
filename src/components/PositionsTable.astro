@@ -1,0 +1,76 @@
+---
+import type { Tables } from '../../supabase/types';
+
+interface Props {
+  positions: Tables<'mt5_positions'>[];
+  currency: string;
+}
+
+const { positions, currency } = Astro.props;
+
+function fmt(n: number, decimals = 2) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+const totalProfit = positions.reduce((s, p) => s + p.profit, 0);
+const totalSwap   = positions.reduce((s, p) => s + p.swap, 0);
+---
+
+{positions.length === 0 ? (
+  <p class="text-neutral-500 text-sm italic">No open positions.</p>
+) : (
+  <div class="overflow-x-auto rounded-xl border border-neutral-600">
+    <table class="w-full text-sm text-left">
+      <thead>
+        <tr class="bg-neutral-700 text-neutral-400 text-xs uppercase tracking-wide">
+          <th class="px-4 py-3">Ticket</th>
+          <th class="px-4 py-3">Symbol</th>
+          <th class="px-4 py-3">Type</th>
+          <th class="px-4 py-3">Volume</th>
+          <th class="px-4 py-3">Open Price</th>
+          <th class="px-4 py-3">Current</th>
+          <th class="px-4 py-3 text-right">P&amp;L ({currency})</th>
+          <th class="px-4 py-3 text-right">Swap ({currency})</th>
+          <th class="px-4 py-3">Opened</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-neutral-700">
+        {positions.map((pos) => (
+          <tr class="bg-neutral-800 hover:bg-neutral-750 transition-colors">
+            <td class="px-4 py-3 font-mono text-neutral-300">{pos.ticket}</td>
+            <td class="px-4 py-3 font-semibold text-white">{pos.symbol}</td>
+            <td class={`px-4 py-3 font-semibold uppercase ${pos.type === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
+              {pos.type}
+            </td>
+            <td class="px-4 py-3 text-neutral-300">{fmt(pos.volume, 2)}</td>
+            <td class="px-4 py-3 font-mono text-neutral-300">{fmt(pos.open_price, 5)}</td>
+            <td class="px-4 py-3 font-mono text-neutral-300">
+              {pos.current_price != null ? fmt(pos.current_price, 5) : '—'}
+            </td>
+            <td class={`px-4 py-3 text-right font-semibold tabular-nums ${pos.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {pos.profit >= 0 ? '+' : ''}{fmt(pos.profit)}
+            </td>
+            <td class={`px-4 py-3 text-right tabular-nums ${pos.swap < 0 ? 'text-red-400' : 'text-neutral-300'}`}>
+              {fmt(pos.swap)}
+            </td>
+            <td class="px-4 py-3 text-neutral-400 text-xs">
+              {new Date(pos.open_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr class="bg-neutral-700 text-sm font-semibold">
+          <td colspan="6" class="px-4 py-3 text-neutral-400 uppercase text-xs tracking-wide">Totals</td>
+          <td class={`px-4 py-3 text-right tabular-nums ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalProfit >= 0 ? '+' : ''}{fmt(totalProfit)}
+          </td>
+          <td class={`px-4 py-3 text-right tabular-nums ${totalSwap < 0 ? 'text-red-400' : 'text-neutral-300'}`}>
+            {fmt(totalSwap)}
+          </td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+)}

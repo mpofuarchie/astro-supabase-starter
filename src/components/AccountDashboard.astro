@@ -1,0 +1,146 @@
+---
+import MetricCard from './MetricCard.astro';
+import PositionsTable from './PositionsTable.astro';
+import type { Tables } from '../../supabase/types';
+
+interface Props {
+  account: Tables<'mt5_accounts'>;
+  positions: Tables<'mt5_positions'>[];
+  sharpeRatio: number | null;
+  tradeCount: number;
+}
+
+const { account, positions, sharpeRatio, tradeCount } = Astro.props;
+
+// Formatting helpers
+function fmtCcy(n: number, currency = 'USD') {
+  return n.toLocaleString('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function fmtPct(n: number | null) {
+  if (n == null) return '—';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+}
+
+const ccy = account.currency;
+
+// P&L = floating_pl (open positions net profit) + swap
+const totalPL = account.floating_pl + account.swap;
+const plTrend = totalPL > 0 ? 'positive' : totalPL < 0 ? 'negative' : 'neutral';
+
+// Equity trend vs balance
+const equityVsBalance = account.equity - account.balance;
+const equityTrend = equityVsBalance > 0 ? 'positive' : equityVsBalance < 0 ? 'negative' : 'neutral';
+
+// Margin level colouring
+let marginLevelTrend: 'positive' | 'negative' | 'neutral' = 'neutral';
+if (account.margin_level != null) {
+  if (account.margin_level >= 200) marginLevelTrend = 'positive';
+  else if (account.margin_level < 100) marginLevelTrend = 'negative';
+}
+
+// Sharpe ratio colouring
+const sharpeTrend = sharpeRatio == null ? 'neutral' : sharpeRatio >= 1 ? 'positive' : sharpeRatio < 0 ? 'negative' : 'neutral';
+const sharpeDisplay = sharpeRatio == null ? '—' : sharpeRatio.toFixed(2);
+
+const lastUpdated = new Date(account.last_updated).toLocaleString('en-US', {
+  month: 'short', day: 'numeric', year: 'numeric',
+  hour: '2-digit', minute: '2-digit',
+});
+---
+
+<section class="flex flex-col gap-6">
+
+  <!-- Account Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div>
+      <h2 class="text-xl font-bold text-white">{account.account_name}</h2>
+      <p class="text-sm text-neutral-400">
+        #{account.account_number} &middot; {account.broker} &middot; 1:{account.leverage} &middot; {ccy}
+      </p>
+    </div>
+    <div class="text-xs text-neutral-500">Updated: {lastUpdated}</div>
+  </div>
+
+  <!-- Primary Metrics Grid -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+    <MetricCard
+      label="Equity"
+      value={fmtCcy(account.equity, ccy)}
+      subValue={`Balance ${fmtCcy(account.balance, ccy)}`}
+      trend={equityTrend}
+      icon="💰"
+      description="Balance + open position P&L"
+    />
+    <MetricCard
+      label="Floating P&L"
+      value={fmtCcy(account.floating_pl, ccy)}
+      subValue={`Incl. swap: ${fmtCcy(totalPL, ccy)}`}
+      trend={plTrend}
+      icon="📈"
+      description="Net unrealised profit/loss"
+    />
+    <MetricCard
+      label="Swap"
+      value={fmtCcy(account.swap, ccy)}
+      trend={account.swap < 0 ? 'negative' : account.swap > 0 ? 'positive' : 'neutral'}
+      icon="🔄"
+      description="Rollover charges on open positions"
+    />
+    <MetricCard
+      label="Total Margin"
+      value={fmtCcy(account.margin, ccy)}
+      subValue={`Free: ${fmtCcy(account.free_margin, ccy)}`}
+      trend="neutral"
+      icon="🏦"
+      description="Margin in use vs free margin"
+    />
+    <MetricCard
+      label="Margin Level"
+      value={fmtPct(account.margin_level)}
+      trend={marginLevelTrend}
+      icon="📊"
+      description="Equity ÷ Margin × 100. &lt;100% = margin call"
+    />
+    <MetricCard
+      label="Sharpe Ratio"
+      value={sharpeDisplay}
+      subValue={`${tradeCount} closed trade${tradeCount !== 1 ? 's' : ''}`}
+      trend={sharpeTrend}
+      icon="⚡"
+      description="Risk-adjusted return (annualised daily returns)"
+    />
+  </div>
+
+  <!-- Secondary Stats Bar -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+    <div class="bg-neutral-700/50 rounded-lg px-4 py-3 flex flex-col gap-1 border border-neutral-600">
+      <span class="text-neutral-400 text-xs uppercase tracking-wide">Commission</span>
+      <span class="text-white font-semibold tabular-nums">{fmtCcy(account.commission, ccy)}</span>
+    </div>
+    <div class="bg-neutral-700/50 rounded-lg px-4 py-3 flex flex-col gap-1 border border-neutral-600">
+      <span class="text-neutral-400 text-xs uppercase tracking-wide">Open Positions</span>
+      <span class="text-white font-semibold tabular-nums">{positions.length}</span>
+    </div>
+    <div class="bg-neutral-700/50 rounded-lg px-4 py-3 flex flex-col gap-1 border border-neutral-600">
+      <span class="text-neutral-400 text-xs uppercase tracking-wide">Closed Trades</span>
+      <span class="text-white font-semibold tabular-nums">{tradeCount}</span>
+    </div>
+    <div class="bg-neutral-700/50 rounded-lg px-4 py-3 flex flex-col gap-1 border border-neutral-600">
+      <span class="text-neutral-400 text-xs uppercase tracking-wide">Currency</span>
+      <span class="text-white font-semibold">{ccy}</span>
+    </div>
+  </div>
+
+  <!-- Open Positions -->
+  <div class="flex flex-col gap-3">
+    <h3 class="text-sm font-semibold uppercase tracking-widest text-neutral-400">Open Positions</h3>
+    <PositionsTable positions={positions} currency={ccy} />
+  </div>
+
+</section>
